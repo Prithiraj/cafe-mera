@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prithiraj.github.io/cafe-mera/sitemap.xml
