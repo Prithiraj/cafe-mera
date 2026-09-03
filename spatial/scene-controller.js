@@ -1,84 +1,149 @@
-import { createSceneObjects, disposeSceneObjects, updateSteam } from './scene-factory.js';
-import { clamp, damp, dampVector3, setGroupOpacity } from './motion.js';
+import { createAssetManager, getSpatialPhotoSources } from './assets.js';
+import { createCameraRig } from './camera-rig.js';
+import { createDishSequence } from './dish-sequence.js';
+import { createSpatialDebug } from './debug.js';
+import { createGalleryWall } from './gallery-wall.js';
+import { createMaterials } from './materials.js';
+import { createMenuTable } from './menu-table.js';
+import { createMeraThread } from './mera-thread.js';
+import { clamp, damp, dampVector3, distance3, disposeObject3D, setGroupOpacity } from './motion.js';
+import { createPhotoDiorama } from './photo-diorama.js';
+import { GROUP_KEYS, SCENE_STATES, THREAD_SHAPES } from './scene-states.js';
+import { createStoryScene } from './story-scene.js';
+import { createProceduralTextures, disposeTextures } from './textures.js';
+import { createTrustScene } from './trust-scene.js';
+import { createVisitScene } from './visit-scene.js';
 
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.181.1/build/three.module.js';
 
-const STATES = {
-  hero:      { tone: 'light', opacity: .62, camera: [0, 0, 7.7], root: [1.45, .05, 0], steam: .95, rings: .82, table: .08, halo: .04, gallery: .03, proof: .03, path: .02, particles: .58 },
-  intro:     { tone: 'light', opacity: .42, camera: [-.12, 0, 8.2], root: [-1.2, .05, 0], steam: .18, rings: .68, table: .08, halo: .06, gallery: .04, proof: .03, path: .02, particles: .24 },
-  menu:      { tone: 'dark',  opacity: .34, camera: [.1, -.05, 7.9], root: [1.4, -.15, 0], steam: .08, rings: .16, table: .92, halo: .04, gallery: .03, proof: .03, path: .02, particles: .18 },
-  discovery: { tone: 'light', opacity: .48, camera: [0, 0, 7.6], root: [-1.05, .05, 0], steam: .18, rings: .22, table: .95, halo: .05, gallery: .04, proof: .03, path: .02, particles: .28 },
-  story:     { tone: 'light', opacity: .42, camera: [-.1, 0, 8], root: [-.65, .05, 0], steam: .06, rings: .10, table: .04, halo: .96, gallery: .05, proof: .05, path: .02, particles: .12 },
-  space:     { tone: 'light', opacity: .38, camera: [.08, .03, 8.15], root: [.7, .05, 0], steam: .05, rings: .22, table: .04, halo: .14, gallery: .72, proof: .04, path: .02, particles: .16 },
-  proof:     { tone: 'dark',  opacity: .30, camera: [-.08, 0, 8.25], root: [-.25, .05, 0], steam: .02, rings: .08, table: .02, halo: .04, gallery: .03, proof: .96, path: .02, particles: .06 },
-  gallery:   { tone: 'light', opacity: .43, camera: [0, 0, 7.85], root: [0, .05, 0], steam: .05, rings: .12, table: .03, halo: .05, gallery: .96, proof: .04, path: .02, particles: .18 },
-  visit:     { tone: 'light', opacity: .46, camera: [.1, 0, 8], root: [.4, .05, 0], steam: .03, rings: .12, table: .02, halo: .03, gallery: .04, proof: .03, path: .96, particles: .12 },
-  final:     { tone: 'dark',  opacity: .28, camera: [0, 0, 8], root: [1.05, .05, 0], steam: .28, rings: .58, table: .03, halo: .03, gallery: .03, proof: .03, path: .18, particles: .22 },
-};
+function createParticles(THREE, material, count) {
+  const positions = new Float32Array(count * 3);
+  for (let index = 0; index < count; index += 1) {
+    positions[index * 3] = (Math.random() - .5) * 8.4;
+    positions[index * 3 + 1] = (Math.random() - .5) * 5.6;
+    positions[index * 3 + 2] = -1 - Math.random() * 4.2;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const points = new THREE.Points(geometry, material.clone());
+  points.material.userData.baseOpacity = material.userData.baseOpacity;
+  return points;
+}
 
-const GROUP_KEYS = ['steam', 'rings', 'table', 'halo', 'gallery', 'proof', 'path', 'particles'];
-
-export async function initSpatialExperience({ canvas, stage }) {
+export async function initSpatialExperience({ canvas, stage, quality, capabilities }) {
   const THREE = await import(THREE_URL);
-  const isTablet = window.innerWidth < 1024;
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
-    antialias: !isTablet,
+    antialias: quality.antialias,
     powerPreference: 'low-power',
   });
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTablet ? 1.15 : 1.4));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dpr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(42, 1, .1, 100);
-  camera.position.set(0, 0, 7.7);
+  const cameraRig = createCameraRig(THREE, scene, { fov: 42 });
+  const proceduralTextures = createProceduralTextures(THREE);
+  const materials = createMaterials(THREE, proceduralTextures);
+  const assetManager = createAssetManager(THREE);
+  const sources = getSpatialPhotoSources();
 
-  const ambient = new THREE.AmbientLight(0xfff3df, 1.35);
-  const key = new THREE.DirectionalLight(0xffd6ab, 1.8);
-  key.position.set(3.5, 4.5, 6);
-  scene.add(ambient, key);
+  const ambient = new THREE.AmbientLight(0xfff4e2, 1.15);
+  const key = new THREE.DirectionalLight(0xffd7ad, 1.45);
+  key.position.set(3.8, 4.8, 6.2);
+  const fill = new THREE.DirectionalLight(0xdfe9dc, .45);
+  fill.position.set(-4, -1, 3.5);
+  scene.add(ambient, key, fill);
 
-  const objects = createSceneObjects(THREE, { particleCount: isTablet ? 34 : 64 });
-  scene.add(objects.root);
+  const root = new THREE.Group();
+  scene.add(root);
+
+  const thread = createMeraThread(THREE, materials, THREAD_SHAPES.hero);
+  const hero = createPhotoDiorama(THREE, materials);
+  const table = createMenuTable(THREE, materials);
+  const dishes = createDishSequence(THREE, materials);
+  const story = createStoryScene(THREE, materials);
+  const gallery = createGalleryWall(THREE, materials);
+  const proof = createTrustScene(THREE, materials);
+  const visit = createVisitScene(THREE, materials);
+  const particles = createParticles(THREE, materials.particles, quality.particles);
+
+  root.add(
+    thread.group,
+    hero.group,
+    table.group,
+    dishes.group,
+    story.group,
+    gallery.group,
+    proof.group,
+    visit.group,
+    particles,
+  );
+
+  const objects = {
+    hero: hero.group,
+    table: table.group,
+    dishes: dishes.group,
+    story: story.group,
+    gallery: gallery.group,
+    proof: proof.group,
+    visit: visit.group,
+    particles,
+  };
 
   let activeName = 'hero';
-  let activeState = STATES.hero;
-  let dishFocus = 0;
+  let activeState = SCENE_STATES.hero;
   let menuFocus = 0;
+  let dishFocus = 0;
   let galleryFocus = -1;
-  let running = true;
   let visible = !document.hidden;
+  let running = true;
   let raf = 0;
+  let renderUntil = performance.now() + 1500;
   let lastTime = performance.now();
-  let pointerTarget = { x: 0, y: 0 };
-  let pointer = { x: 0, y: 0 };
-  const groupOpacity = Object.fromEntries(GROUP_KEYS.map((keyName) => [keyName, 0]));
+  let stageOpacity = 0;
+  const pointerTarget = { x: 0, y: 0 };
+  const pointer = { x: 0, y: 0 };
   const rootTarget = new THREE.Vector3(...activeState.root);
-  const cameraTarget = new THREE.Vector3(...activeState.camera);
+  const groupOpacity = Object.fromEntries(GROUP_KEYS.map((key) => [key, 0]));
+  const debug = createSpatialDebug({ enabled: quality.debug, renderer, quality });
 
-  const resize = () => {
+  function invalidate(duration = 800) {
+    renderUntil = Math.max(renderUntil, performance.now() + duration);
+    if (visible && running && !raf) {
+      lastTime = performance.now();
+      raf = requestAnimationFrame(tick);
+    }
+  }
+
+  function resize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dpr));
     renderer.setSize(width, height, false);
-    camera.aspect = width / Math.max(height, 1);
-    camera.updateProjectionMatrix();
-  };
+    cameraRig.resize(width, height);
+    invalidate(650);
+  }
   resize();
 
-  const setActiveState = (name) => {
-    if (!STATES[name] || activeName === name) return;
+  function setActiveState(name) {
+    const next = SCENE_STATES[name];
+    if (!next || activeName === name) return;
     activeName = name;
-    activeState = STATES[name];
+    activeState = next;
+    rootTarget.set(...next.root);
+    cameraRig.setRigTarget(next.camera);
+    thread.setTarget(THREAD_SHAPES[next.thread], { steam: next.steam });
     document.documentElement.dataset.spatialSection = name;
-    stage.dataset.tone = activeState.tone;
-    rootTarget.set(...activeState.root);
-    cameraTarget.set(...activeState.camera);
-  };
+    stage.dataset.tone = next.tone;
+    invalidate(1500);
+  }
 
   document.documentElement.dataset.spatialSection = activeName;
   stage.dataset.tone = activeState.tone;
+  cameraRig.setRigTarget(activeState.camera);
+  thread.setTarget(THREAD_SHAPES[activeState.thread], { steam: activeState.steam });
 
   const ratios = new Map();
   const sections = [...document.querySelectorAll('[data-spatial]')];
@@ -92,159 +157,237 @@ export async function initSpatialExperience({ canvas, stage }) {
         best = section;
       }
     });
-    if (best && bestRatio > .12) setActiveState(best.dataset.spatial);
-  }, { threshold: [0, .12, .25, .4, .6, .8] });
+    if (best && bestRatio > .11) setActiveState(best.dataset.spatial);
+  }, { threshold: [0, .11, .2, .35, .5, .7, .85] });
   sections.forEach((section) => sectionObserver.observe(section));
 
   const dishObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-      if (entry.isIntersecting && entry.intersectionRatio > .45) {
+      if (entry.isIntersecting && entry.intersectionRatio > .4) {
         dishFocus = Number(entry.target.dataset.spatialDish || 0);
+        dishes.setFocus(dishFocus);
+        invalidate(900);
       }
     });
-  }, { threshold: [.45, .7] });
+  }, { threshold: [.4, .62, .8] });
   document.querySelectorAll('[data-spatial-dish]').forEach((card) => dishObserver.observe(card));
 
   const menuHandlers = [];
+  const menuMap = { all: 0, ethiopian: 0, breakfast: 1, lunch: 2, drinks: 1 };
   document.querySelectorAll('[data-filter]').forEach((button) => {
     const handler = () => {
-      const map = { all: 0, ethiopian: 0, breakfast: 1, lunch: 2, drinks: 1 };
-      menuFocus = map[button.dataset.filter] ?? 0;
+      const mode = button.dataset.filter || 'all';
+      menuFocus = menuMap[mode] ?? 0;
+      table.setFocus(menuFocus, mode);
+      invalidate(850);
     };
     button.addEventListener('click', handler);
+    button.addEventListener('focus', handler);
     menuHandlers.push([button, handler]);
   });
 
-  const galleryFigures = [...document.querySelectorAll('[data-spatial-photo]')];
   const galleryHandlers = [];
+  const galleryFigures = [...document.querySelectorAll('[data-spatial-photo]')];
   galleryFigures.forEach((figure, index) => {
     const enter = () => {
       galleryFocus = index;
+      gallery.setFocus(index);
       figure.classList.add('is-spatial-active');
+      invalidate(850);
     };
     const leave = () => {
       galleryFocus = -1;
+      gallery.setFocus(-1);
       figure.classList.remove('is-spatial-active');
+      invalidate(650);
     };
     figure.addEventListener('pointerenter', enter);
     figure.addEventListener('pointerleave', leave);
+    figure.addEventListener('focusin', enter);
+    figure.addEventListener('focusout', leave);
     galleryHandlers.push([figure, enter, leave]);
   });
 
-  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const heroVisual = document.querySelector('.hero-visual');
   const galleryGrid = document.querySelector('.gallery-grid');
 
-  const onPointerMove = (event) => {
-    if (!finePointer) return;
+  function onPointerMove(event) {
+    if (!capabilities.finePointer) return;
     pointerTarget.x = clamp((event.clientX / window.innerWidth - .5) * 2, -1, 1);
     pointerTarget.y = clamp((event.clientY / window.innerHeight - .5) * 2, -1, 1);
+    cameraRig.setPointer(pointerTarget.x, pointerTarget.y);
+
     if (activeName === 'hero' && heroVisual) {
-      heroVisual.style.setProperty('--hero-ry', `${pointerTarget.x * 1.6}deg`);
-      heroVisual.style.setProperty('--hero-rx', `${pointerTarget.y * -1.2}deg`);
+      heroVisual.style.setProperty('--hero-ry', `${pointerTarget.x * 1.45}deg`);
+      heroVisual.style.setProperty('--hero-rx', `${pointerTarget.y * -1.05}deg`);
     }
     if (activeName === 'gallery' && galleryGrid) {
-      galleryGrid.style.setProperty('--photo-ry', `${pointerTarget.x * .85}deg`);
-      galleryGrid.style.setProperty('--photo-rx', `${pointerTarget.y * -.65}deg`);
+      galleryGrid.style.setProperty('--photo-ry', `${pointerTarget.x * .72}deg`);
+      galleryGrid.style.setProperty('--photo-rx', `${pointerTarget.y * -.52}deg`);
     }
-  };
-  window.addEventListener('pointermove', onPointerMove, { passive: true });
+    invalidate(520);
+  }
 
-  const onScroll = () => {
+  function onPointerLeave() {
+    pointerTarget.x = 0;
+    pointerTarget.y = 0;
+    cameraRig.setPointer(0, 0);
+    if (heroVisual) {
+      heroVisual.style.setProperty('--hero-ry', '0deg');
+      heroVisual.style.setProperty('--hero-rx', '0deg');
+    }
+    if (galleryGrid) {
+      galleryGrid.style.setProperty('--photo-ry', '0deg');
+      galleryGrid.style.setProperty('--photo-rx', '0deg');
+    }
+    invalidate(650);
+  }
+
+  function onScroll() {
     if (activeName === 'hero' && heroVisual) {
       const rect = document.querySelector('.hero')?.getBoundingClientRect();
       if (rect) {
         const progress = clamp(-rect.top / Math.max(rect.height, 1), 0, 1);
-        heroVisual.style.setProperty('--hero-lift', `${progress * -10}px`);
+        heroVisual.style.setProperty('--hero-lift', `${progress * -9}px`);
       }
     }
-  };
-  window.addEventListener('scroll', onScroll, { passive: true });
+    invalidate(180);
+  }
 
-  const onVisibility = () => {
-    visible = !document.hidden;
-    if (visible && running && !raf) {
-      lastTime = performance.now();
-      raf = requestAnimationFrame(tick);
-    }
-  };
-  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+  document.documentElement.addEventListener('mouseleave', onPointerLeave, { passive: true });
+  window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', resize, { passive: true });
 
-  function updateInteractiveObjects(delta, time) {
-    const plateIndex = activeName === 'discovery' ? dishFocus : menuFocus;
-    objects.table.userData.plates.forEach((plate, index) => {
-      const targetScale = index === plateIndex ? 1.16 : .92;
-      const next = damp(plate.scale.x, targetScale, 5.5, delta);
-      plate.scale.setScalar(next);
-      plate.rotation.z = damp(plate.rotation.z, (index - 1) * .18 + Math.sin(time * .00025 + index) * .035, 3.2, delta);
-    });
+  function onVisibility() {
+    visible = !document.hidden;
+    if (visible) invalidate(500);
+    else if (raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibility);
 
-    objects.gallery.userData.frames.forEach((frame, index) => {
-      const targetScale = index === galleryFocus ? 1.16 : 1;
-      const next = damp(frame.scale.x, targetScale, 6, delta);
-      frame.scale.setScalar(next);
-      frame.position.z = damp(frame.position.z, ([-2.2, -1.4, -2.7, -1.8][index]) + (index === galleryFocus ? .46 : 0), 5, delta);
-    });
+  function onContextLost(event) {
+    event.preventDefault();
+    running = false;
+    document.documentElement.classList.remove('spatial-ready');
+    document.documentElement.classList.add('spatial-static');
+  }
+  canvas.addEventListener('webglcontextlost', onContextLost, false);
+
+  async function loadHeroTexture() {
+    if (!quality.photoTextures || !sources.hero) return;
+    const texture = await assetManager.loadTexture(sources.hero);
+    if (texture && running) {
+      hero.setTexture(texture);
+      invalidate(900);
+    }
+  }
+  loadHeroTexture();
+
+  let galleryLoaded = false;
+  const gallerySection = document.querySelector('.gallery') || document.querySelector('.space-section');
+  const galleryLoadObserver = gallerySection && quality.photoTextures
+    ? new IntersectionObserver(async (entries, observer) => {
+        if (!entries.some((entry) => entry.isIntersecting) || galleryLoaded) return;
+        galleryLoaded = true;
+        observer.disconnect();
+        const [interiorTexture, galleryTextures] = await Promise.all([
+          assetManager.loadTexture(sources.interior),
+          Promise.all(sources.gallery.slice(0, 6).map((url) => assetManager.loadTexture(url))),
+        ]);
+        if (!running) return;
+        if (interiorTexture) gallery.setInteriorTexture(interiorTexture);
+        gallery.setTextures(galleryTextures.filter(Boolean));
+        invalidate(1000);
+      }, { rootMargin: '1100px 0px' })
+    : null;
+  if (galleryLoadObserver && gallerySection) galleryLoadObserver.observe(gallerySection);
+
+  function updateParticles(delta, now) {
+    particles.rotation.z -= delta * .0035;
+    particles.position.y = Math.sin(now * .00012) * .055;
   }
 
   function tick(now) {
     raf = 0;
     if (!running || !visible) return;
+
     const delta = Math.min((now - lastTime) / 1000, .05);
     lastTime = now;
+    const time = now / 1000;
+    let energy = 0;
 
-    pointer.x = damp(pointer.x, pointerTarget.x, 3.5, delta);
-    pointer.y = damp(pointer.y, pointerTarget.y, 3.5, delta);
+    pointer.x = damp(pointer.x, pointerTarget.x, 4.2, delta);
+    pointer.y = damp(pointer.y, pointerTarget.y, 4.2, delta);
 
-    rootTarget.set(...activeState.root);
-    cameraTarget.set(...activeState.camera);
-    if (finePointer && activeName === 'hero') {
-      cameraTarget.x += pointer.x * .075;
-      cameraTarget.y -= pointer.y * .055;
-    }
+    energy += distance3(root.position, rootTarget);
+    dampVector3(root.position, rootTarget, 3.5, delta);
+    energy += cameraRig.update(delta, { pointerEnabled: capabilities.finePointer && activeName === 'hero' });
 
-    dampVector3(objects.root.position, rootTarget, 3.6, delta);
-    dampVector3(camera.position, cameraTarget, 3.8, delta);
-    camera.lookAt(0, 0, -1.7);
+    energy += thread.update(delta, time, activeState.threadOpacity);
+    hero.update(delta, time, pointer, activeState.hero);
+    energy += table.update(delta, time);
+    energy += dishes.update(delta, time);
+    story.update(delta, time, activeState.story);
+    energy += gallery.update(delta, activeName === 'gallery' ? pointer.x : 0);
+    visit.update(delta, time, activeState.visit);
+    updateParticles(delta, now);
 
-    GROUP_KEYS.forEach((keyName) => {
-      groupOpacity[keyName] = damp(groupOpacity[keyName], activeState[keyName], 4.1, delta);
-      setGroupOpacity(objects[keyName], groupOpacity[keyName]);
+    GROUP_KEYS.forEach((key) => {
+      const previous = groupOpacity[key];
+      groupOpacity[key] = damp(previous, activeState[key], 4.2, delta);
+      energy += Math.abs(groupOpacity[key] - activeState[key]);
+      setGroupOpacity(objects[key], groupOpacity[key]);
     });
 
-    stage.style.setProperty('--spatial-opacity', String(activeState.opacity));
-    objects.rings.rotation.z += delta * .018;
-    objects.particles.rotation.z -= delta * .006;
-    objects.particles.position.y = Math.sin(now * .00014) * .08;
-    objects.gallery.rotation.y = damp(objects.gallery.rotation.y, activeName === 'gallery' ? pointer.x * .04 : 0, 3.2, delta);
-    objects.path.rotation.z = damp(objects.path.rotation.z, activeName === 'visit' ? -.04 : .02, 3.2, delta);
+    stageOpacity = damp(stageOpacity, activeState.stageOpacity, 4.2, delta);
+    stage.style.setProperty('--spatial-opacity', stageOpacity.toFixed(3));
 
-    updateSteam(now / 1000, objects.steam);
-    updateInteractiveObjects(delta, now);
-    renderer.render(scene, camera);
-    raf = requestAnimationFrame(tick);
+    renderer.render(scene, cameraRig.camera);
+    const continuous = activeState.continuous;
+    const needsMore = continuous || energy > .005 || now < renderUntil;
+    debug.update(now, {
+      section: activeName,
+      focus: activeName === 'gallery' ? galleryFocus : activeName === 'discovery' ? dishFocus : menuFocus,
+      rendering: needsMore,
+    });
+
+    if (needsMore) raf = requestAnimationFrame(tick);
   }
 
   document.documentElement.classList.remove('spatial-pending');
   document.documentElement.classList.add('spatial-ready');
-  raf = requestAnimationFrame(tick);
+  invalidate(1600);
 
-  return () => {
+  return async () => {
     running = false;
     if (raf) cancelAnimationFrame(raf);
     sectionObserver.disconnect();
     dishObserver.disconnect();
-    menuHandlers.forEach(([button, handler]) => button.removeEventListener('click', handler));
+    galleryLoadObserver?.disconnect?.();
+    menuHandlers.forEach(([button, handler]) => {
+      button.removeEventListener('click', handler);
+      button.removeEventListener('focus', handler);
+    });
     galleryHandlers.forEach(([figure, enter, leave]) => {
       figure.removeEventListener('pointerenter', enter);
       figure.removeEventListener('pointerleave', leave);
+      figure.removeEventListener('focusin', enter);
+      figure.removeEventListener('focusout', leave);
     });
     window.removeEventListener('pointermove', onPointerMove);
+    document.documentElement.removeEventListener('mouseleave', onPointerLeave);
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', resize);
     document.removeEventListener('visibilitychange', onVisibility);
-    disposeSceneObjects(objects.root);
+    canvas.removeEventListener('webglcontextlost', onContextLost);
+    debug.destroy();
+    disposeObject3D(root);
+    disposeTextures(proceduralTextures);
+    await assetManager.dispose();
     renderer.dispose();
     document.documentElement.classList.remove('spatial-ready');
   };
