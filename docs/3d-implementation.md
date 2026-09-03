@@ -1,10 +1,12 @@
 # Cafe Mera — 3D Experience Implementation Notes
 
+> **Prototype baseline:** The implementation described here is the current technical proof-of-concept, not the final spatial design. Future 3D work should follow `docs/3d-experience-deep-plan.md` phase by phase, with visual review between phases.
+
 **Implementation status:** Implemented as a progressive enhancement on top of the existing static site.
 
 ## What changed
 
-The 3D release follows the approved `docs/3d-experience-plan.md` and keeps Cafe Mera's real photography, content, menu, reviews, contact information, and calls to action as normal HTML.
+The 3D release follows the original `docs/3d-experience-plan.md` and keeps Cafe Mera's real photography, content, menu, reviews, contact information, and calls to action as normal HTML.
 
 The spatial layer adds:
 
