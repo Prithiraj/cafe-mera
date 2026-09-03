@@ -53,7 +53,7 @@ jobs:
               print('\n'.join(missing))
               sys.exit(1)
 
-          print(f'Validated {len(roots)} module files.')
+          print(f'Validated {len(roots)} legacy spatial module files.')
 
       - name: Ensure retired prototype factory is unused
         shell: bash
@@ -73,3 +73,20 @@ jobs:
           test -f origami-lab.js
           grep -q 'origami-lab.css' origami-lab.html
           grep -q 'origami-lab.js' origami-lab.html
+
+      - name: Validate production kinetic fold homepage
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'data-hero-fold' index.html
+          grep -q 'data-menu-folio' index.html
+          grep -q 'data-gallery-wall' index.html
+          grep -q 'data-visit-aperture' index.html
+          if grep -q 'spatial.css' index.html; then
+            echo 'Production homepage still references spatial.css.'
+            exit 1
+          fi
+          if grep -q "import('./spatial.js')" script.js; then
+            echo 'Production script still boots the retired floating spatial layer.'
+            exit 1
+          fi
