@@ -1,0 +1,63 @@
+name: Validate spatial experience
+
+on:
+  push:
+    branches:
+      - main
+      - 'spatial-*'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check script.js
+          for file in spatial.js spatial/*.js; do
+            node --input-type=module --check < "$file"
+          done
+
+      - name: Check local module imports
+        shell: python
+        run: |
+          import pathlib
+          import re
+          import sys
+
+          roots = [pathlib.Path('spatial.js'), *sorted(pathlib.Path('spatial').glob('*.js'))]
+          missing = []
+          pattern = re.compile(r"(?:from\s+|import\()['\"](\.[^'\"]+)['\"]")
+
+          for path in roots:
+              text = path.read_text(encoding='utf-8')
+              for specifier in pattern.findall(text):
+                  target = (path.parent / specifier).resolve()
+                  if target.suffix == '':
+                      target = target.with_suffix('.js')
+                  if not target.exists():
+                      missing.append(f'{path}: {specifier} -> {target}')
+
+          if missing:
+              print('\n'.join(missing))
+              sys.exit(1)
+
+          print(f'Validated {len(roots)} module files.')
+
+      - name: Ensure retired prototype factory is unused
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R "scene-factory" -n spatial.js spatial script.js; then
+            echo "Retired scene-factory reference found."
+            exit 1
+          fi
