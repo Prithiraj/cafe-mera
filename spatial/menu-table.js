@@ -63,6 +63,7 @@ export function createMenuTable(THREE, materials) {
     material.userData.baseOpacity = index === 1 ? .07 : .11;
     const paper = new THREE.Mesh(new THREE.PlaneGeometry(.82, 1.18), material);
     paper.position.set(-2.35 + index * 2.2, -1.25 + (index % 2) * .22, -.7 - index * .08);
+    paper.userData.homeY = paper.position.y;
     paper.rotation.z = -.16 + index * .15;
     papers.push(paper);
     group.add(paper);
@@ -90,7 +91,9 @@ export function createMenuTable(THREE, materials) {
       const home = plate.userData.home;
       const lift = active ? .24 : 0;
       const targetZ = home.z + lift;
-      plate.position.z = damp(plate.position.z, targetZ, 5.2, delta);
+      const nextZ = damp(plate.position.z, targetZ, 5.2, delta);
+      energy += Math.abs(plate.position.z - nextZ);
+      plate.position.z = nextZ;
       plate.rotation.z = damp(
         plate.rotation.z,
         (index - 1) * .16 + Math.sin(time * .25 + index) * .025,
@@ -101,11 +104,12 @@ export function createMenuTable(THREE, materials) {
 
     const drinkMode = mode === 'drinks';
     const cupScale = damp(cup.scale.x, drinkMode ? 1.18 : .96, 5.2, delta);
+    energy += Math.abs(cup.scale.x - cupScale);
     cup.scale.setScalar(cupScale);
     cup.rotation.z = damp(cup.rotation.z, drinkMode ? .08 : -.04, 4, delta);
 
     papers.forEach((paper, index) => {
-      paper.position.y += Math.sin(time * .13 + index) * .00018;
+      paper.position.y = paper.userData.homeY + Math.sin(time * .13 + index) * .018;
     });
 
     return energy;
