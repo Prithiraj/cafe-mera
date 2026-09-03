@@ -31,6 +31,7 @@ jobs:
         run: |
           mkdir -p _site/assets _site/spatial
           cp index.html 404.html styles.css script.js spatial.css spatial.js robots.txt sitemap.xml _site/
+          cat aesthetic.css >> _site/styles.css
           cp origami-lab.html origami-lab.css origami-lab.js _site/
           cp spatial/*.js _site/spatial/
           cp assets/favicon.svg _site/assets/
