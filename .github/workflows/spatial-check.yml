@@ -6,6 +6,7 @@ on:
       - main
       - 'spatial-*'
       - 'origami-*'
+      - 'aesthetic-*'
   pull_request:
     branches: [main]
 
@@ -90,3 +91,11 @@ jobs:
             echo 'Production script still boots the retired floating spatial layer.'
             exit 1
           fi
+
+      - name: Validate aesthetic refinement layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aesthetic.css
+          grep -q -- '--shadow-soft' aesthetic.css
+          grep -q 'cat aesthetic.css >> _site/styles.css' .github/workflows/pages.yml
