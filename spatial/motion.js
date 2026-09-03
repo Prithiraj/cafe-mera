@@ -10,6 +10,12 @@ export function dampVector3(vector, target, lambda, delta) {
   vector.z = damp(vector.z, target.z, lambda, delta);
 }
 
+export function distance3(vector, target) {
+  return Math.abs(vector.x - target.x)
+    + Math.abs(vector.y - target.y)
+    + Math.abs(vector.z - target.z);
+}
+
 export function setGroupOpacity(group, opacity) {
   if (!group) return;
   group.userData.opacity = opacity;
@@ -20,8 +26,17 @@ export function setGroupOpacity(group, opacity) {
         material.userData = material.userData || {};
         material.userData.baseOpacity = material.opacity ?? 1;
       }
+      const multiplier = material.userData.opacityMultiplier ?? 1;
       material.transparent = true;
-      material.opacity = material.userData.baseOpacity * opacity;
+      material.opacity = material.userData.baseOpacity * opacity * multiplier;
     });
+  });
+}
+
+export function disposeObject3D(root) {
+  root?.traverse?.((object) => {
+    object.geometry?.dispose?.();
+    if (Array.isArray(object.material)) object.material.forEach((material) => material?.dispose?.());
+    else object.material?.dispose?.();
   });
 }
