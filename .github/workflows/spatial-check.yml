@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'spatial-*'
+      - 'origami-*'
   pull_request:
     branches: [main]
 
@@ -23,6 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check script.js
+          node --check origami-lab.js
           for file in spatial.js spatial/*.js; do
             node --input-type=module --check < "$file"
           done
@@ -61,3 +63,13 @@ jobs:
             echo "Retired scene-factory reference found."
             exit 1
           fi
+
+      - name: Ensure origami lab assets are complete
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f origami-lab.html
+          test -f origami-lab.css
+          test -f origami-lab.js
+          grep -q 'origami-lab.css' origami-lab.html
+          grep -q 'origami-lab.js' origami-lab.html
