@@ -67,6 +67,10 @@ tabs.forEach((tab) => {
     menuItems.forEach((item) => {
       item.hidden = filter !== 'all' && item.dataset.category !== filter;
     });
+
+    document.dispatchEvent(new CustomEvent('cafe:menu-filter', {
+      detail: { filter },
+    }));
   });
 });
 
