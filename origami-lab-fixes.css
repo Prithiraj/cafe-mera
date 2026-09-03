@@ -1,0 +1,12 @@
+.hero-reveal-photo img{transform:scale(var(--hero-photo-scale,1.035))}
+.fold-leaf-left{transform:translate3d(var(--hero-left-x,0%),0,var(--hero-left-z,0px)) rotateY(var(--hero-left-ry,0deg)) rotateZ(var(--hero-left-rz,0deg))}
+.fold-leaf-right{transform:translate3d(var(--hero-right-x,0%),0,var(--hero-right-z,0px)) rotateY(var(--hero-right-ry,0deg)) rotateZ(var(--hero-right-rz,0deg))}
+.fold-seam{transform:translateX(var(--seam-x,0px)) rotate(7deg);opacity:var(--seam-opacity,1)}
+.fold-edge-light{opacity:var(--edge-opacity,0)}
+.gallery-panel-a{transform:rotateY(var(--gallery-a-ry,48deg)) translateZ(var(--gallery-a-z,0px))}
+.gallery-panel-b{transform:translateZ(var(--gallery-b-z,0px)) rotateX(var(--gallery-b-rx,-4deg))}
+.gallery-panel-c{transform:rotateY(var(--gallery-c-ry,-52deg)) translateZ(var(--gallery-c-z,0px))}
+.gallery-panel-a.is-focus{transform:rotateY(1deg) translateZ(74px)}
+.gallery-panel-b.is-focus{transform:translateZ(86px) rotateX(0deg)}
+.gallery-panel-c.is-focus{transform:rotateY(-1deg) translateZ(74px)}
+@media(max-width:650px){.gallery-panel{transform:none!important}}
