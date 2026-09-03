@@ -1,6 +1,9 @@
+import { detectCapabilities, readSpatialFlags } from './spatial/capabilities.js';
+import { selectQuality } from './spatial/quality.js';
+
 const root = document.documentElement;
 
-function prepareSpatialDom() {
+function prepareSpatialDom(quality) {
   if (!document.querySelector('link[data-spatial-style]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -10,16 +13,6 @@ function prepareSpatialDom() {
   }
 
   document.querySelector('.hero-aroma')?.remove();
-
-  let stage = document.querySelector('.spatial-stage');
-  if (!stage) {
-    stage = document.createElement('div');
-    stage.className = 'spatial-stage';
-    stage.setAttribute('aria-hidden', 'true');
-    stage.innerHTML = '<canvas id="spatial-canvas"></canvas><div class="spatial-vignette"></div>';
-    const header = document.querySelector('.site-header');
-    document.body.insertBefore(stage, header || document.body.firstChild);
-  }
 
   const sectionMap = [
     ['.hero', 'hero'], ['.intro', 'intro'], ['.menu-section', 'menu'],
@@ -38,37 +31,47 @@ function prepareSpatialDom() {
     figure.dataset.spatialPhoto = String(index);
   });
 
-  return { stage, canvas: stage.querySelector('#spatial-canvas') };
-}
-
-function hasWebGL() {
-  try {
-    const testCanvas = document.createElement('canvas');
-    return Boolean(testCanvas.getContext('webgl2') || testCanvas.getContext('webgl'));
-  } catch {
-    return false;
+  const heroImage = document.querySelector('.hero-visual img');
+  if (heroImage?.currentSrc || heroImage?.src) {
+    document.querySelector('.hero-visual')?.style.setProperty(
+      '--hero-photo',
+      `url("${heroImage.currentSrc || heroImage.src}")`,
+    );
   }
-}
 
-function shouldEnableSpatial() {
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const saveData = navigator.connection?.saveData === true;
-  const narrow = window.innerWidth < 700;
-  const lowMemory = typeof navigator.deviceMemory === 'number' && navigator.deviceMemory < 4;
-  return !reducedMotion && !saveData && !narrow && !lowMemory && hasWebGL();
+  let stage = document.querySelector('.spatial-stage');
+  if (quality.renderer && !stage) {
+    stage = document.createElement('div');
+    stage.className = 'spatial-stage';
+    stage.setAttribute('aria-hidden', 'true');
+    stage.innerHTML = '<canvas id="spatial-canvas"></canvas><div class="spatial-vignette"></div>';
+    const header = document.querySelector('.site-header');
+    document.body.insertBefore(stage, header || document.body.firstChild);
+  }
+
+  return { stage, canvas: stage?.querySelector('#spatial-canvas') || null };
 }
 
 async function bootSpatial() {
-  const { canvas, stage } = prepareSpatialDom();
-  if (!canvas || !stage || !shouldEnableSpatial()) {
-    root.classList.add('spatial-static');
+  const flags = readSpatialFlags();
+  const capabilities = detectCapabilities();
+  const quality = selectQuality(capabilities, flags);
+
+  root.dataset.spatialTier = String(quality.tier);
+  root.dataset.spatialQuality = quality.name;
+  root.classList.add(`spatial-tier-${quality.tier}`);
+
+  const { canvas, stage } = prepareSpatialDom(quality);
+
+  if (!quality.renderer || !canvas || !stage) {
+    root.classList.add(quality.tier === 0 ? 'spatial-static' : 'spatial-css');
     return;
   }
 
   root.classList.add('spatial-pending');
   try {
     const { initSpatialExperience } = await import('./spatial/scene-controller.js');
-    await initSpatialExperience({ canvas, stage });
+    await initSpatialExperience({ canvas, stage, quality, capabilities });
   } catch (error) {
     root.classList.remove('spatial-pending');
     root.classList.add('spatial-static');
@@ -77,7 +80,7 @@ async function bootSpatial() {
 }
 
 if ('requestIdleCallback' in window) {
-  window.requestIdleCallback(() => bootSpatial(), { timeout: 1400 });
+  window.requestIdleCallback(() => bootSpatial(), { timeout: 1200 });
 } else {
-  window.setTimeout(bootSpatial, 650);
+  window.setTimeout(bootSpatial, 520);
 }
